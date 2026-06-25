@@ -6,7 +6,7 @@
   "publisher": "your-name",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sivin-s/git-commit-reminder.git"
+    "url": "https://github.com/sivin-s/git-commit-reminder"
   },
   "engines": {
     "vscode": "^1.125.0"
