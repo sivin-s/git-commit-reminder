@@ -1,2 +1,16 @@
-node_modules
-out
+# Dependencies
+node_modules/
+
+# Build output
+out/
+
+# VSIX package
+git-commit-reminder-*.vsix
+*.vsix
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode-test/
