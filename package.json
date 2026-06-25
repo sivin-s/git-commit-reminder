@@ -3,7 +3,7 @@
   "displayName": "Git Commit Reminder",
   "description": "Reminds you to git commit when saving or closing a file",
   "version": "1.0.0",
-  "publisher": "your-name",
+  "publisher": "sivin",
   "repository": {
     "type": "git",
     "url": "https://github.com/sivin-s/git-commit-reminder"
