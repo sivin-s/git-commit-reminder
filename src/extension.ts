@@ -36,29 +36,56 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Check if file is in a git repository
-    async function isGitRepository(filePath: string): Promise<boolean> {
+    // async function isGitRepository(filePath: string): Promise<boolean> {
+    //     try {
+    //         const dir = path.dirname(filePath);
+    //         await execAsync('git rev-parse --is-inside-work-tree', { cwd: dir });
+    //         return true;
+    //     } catch {
+    //         return false;
+    //     }
+    // }
+
+    // // Get git status for a file
+    // async function getFileGitStatus(filePath: string): Promise<string | null> {
+    //     try {
+    //         const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+    //         if (!workspaceFolder) return null;
+
+    //         const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
+    //         const { stdout } = await execAsync(`git status --porcelain "${relativePath}"`, {
+    //             cwd: workspaceFolder.uri.fsPath
+    //         });
+    //         return stdout.trim();
+    //     } catch {
+    //         return null;
+    //     }
+    // }
+
+        // Find the actual root of the git repository (fixes monorepo issues)
+    async function getGitRoot(filePath: string): Promise<string | null> {
         try {
             const dir = path.dirname(filePath);
-            await execAsync('git rev-parse --is-inside-work-tree', { cwd: dir });
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    // Get git status for a file
-    async function getFileGitStatus(filePath: string): Promise<string | null> {
-        try {
-            const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
-            if (!workspaceFolder) return null;
-
-            const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
-            const { stdout } = await execAsync(`git status --porcelain "${relativePath}"`, {
-                cwd: workspaceFolder.uri.fsPath
-            });
+            const { stdout } = await execAsync('git rev-parse --show-toplevel', { cwd: dir });
             return stdout.trim();
         } catch {
             return null;
+        }
+    }
+
+    // Check if the file actually has uncommitted changes
+    async function hasUncommittedChanges(filePath: string, gitRoot: string): Promise<boolean> {
+        try {
+            const relativePath = path.relative(gitRoot, filePath);
+            // Git requires forward slashes, even on Windows
+            const gitPath = relativePath.split(path.sep).join('/');
+            
+            const { stdout } = await execAsync(`git status --porcelain "${gitPath}"`, {
+                cwd: gitRoot
+            });
+            return stdout.trim().length > 0;
+        } catch {
+            return false;
         }
     }
 
@@ -103,9 +130,17 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        // Check if file is in git repo
-        const isGit = await isGitRepository(filePath);
-        if (!isGit) return;
+               // Check if file is in git repo
+        // const isGit = await isGitRepository(filePath);
+        // if (!isGit) return;
+
+                // Find git root (works perfectly in monorepos like backend/ and frontend/)
+        const gitRoot = await getGitRoot(filePath);
+        if (!gitRoot) return;
+
+        // Only remind if git actually sees uncommitted changes for this file
+        const hasChanges = await hasUncommittedChanges(filePath, gitRoot);
+        if (!hasChanges) return;
 
         // Get file info
         const fileInfo = modifiedFiles.get(filePath);
@@ -172,23 +207,49 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Open commit panel (source control view)
+    // async function openCommitPanel(document: vscode.TextDocument) {
+    //     // Stage the file
+    //     try {
+    //         const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+    //         if (workspaceFolder) {
+    //             const relativePath = path.relative(workspaceFolder.uri.fsPath, document.uri.fsPath);
+    //             await execAsync(`git add "${relativePath}"`, { cwd: workspaceFolder.uri.fsPath });
+    //             vscode.window.showInformationMessage(`Staged: ${relativePath}`);
+    //         }
+    //     } catch (error) {
+    //         vscode.window.showErrorMessage(`Failed to stage file: ${error}`);
+    //     }
+
+    //     // Focus on source control view
+    //     await vscode.commands.executeCommand('workbench.view.scm');
+
+    //     // Focus on commit message input
+    //     await vscode.commands.executeCommand('scm.focus');
+    // }
+
+
+        // Open commit panel (source control view)
     async function openCommitPanel(document: vscode.TextDocument) {
-        // Stage the file
+        const gitRoot = await getGitRoot(document.uri.fsPath);
+        if (!gitRoot) {
+            vscode.window.showErrorMessage("Not inside a Git repository.");
+            return;
+        }
+
+        // Stage the file using the git root
         try {
-            const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-            if (workspaceFolder) {
-                const relativePath = path.relative(workspaceFolder.uri.fsPath, document.uri.fsPath);
-                await execAsync(`git add "${relativePath}"`, { cwd: workspaceFolder.uri.fsPath });
-                vscode.window.showInformationMessage(`Staged: ${relativePath}`);
-            }
+            const relativePath = path.relative(gitRoot, document.uri.fsPath);
+            // Git requires forward slashes
+            const gitPath = relativePath.split(path.sep).join('/');
+            
+            await execAsync(`git add "${gitPath}"`, { cwd: gitRoot });
+            vscode.window.showInformationMessage(`Staged: ${relativePath}`);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to stage file: ${error}`);
         }
 
         // Focus on source control view
         await vscode.commands.executeCommand('workbench.view.scm');
-
-        // Focus on commit message input
         await vscode.commands.executeCommand('scm.focus');
     }
 
